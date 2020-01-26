@@ -1,0 +1,223 @@
+---
+title: "Regression Project_Yagna Venkitasamy"
+author: "Yagna Dheepika"
+date: "October 19, 2019"
+output:
+  word_document:
+    toc: yes
+  html_document:
+    df_print: paged
+    toc: yes
+---
+Pre-processing:
+```{r}
+rm(list=ls())
+library(readxl)
+library(moments)
+library(rio)
+library(data.table)
+library(car)
+library(carData)
+master.data = read.csv("6304 Regression Project Data.csv")
+attach(master.data)
+set.seed(24889542)
+my.data = master.data[sample(1:nrow(master.data),100,replace=FALSE),]
+attach(my.data)
+summary(my.data)
+```
+Data cleaning Steps:
+Removing the max outlier in trip total variable
+```{r}
+max(my.data$trip_total)
+which(my.data$trip_total ==150.9)
+my.data = my.data[-38,]
+```
+Removing the data rows that has trip seconds as 0 and trip total>0
+```{r}
+final.data = subset(my.data, trip_seconds !=0 )
+```
+Removing the outlier in the extras and trip miles variables
+```{r}
+outliers_extras = boxplot(final.data$extras)$out
+final.data = final.data[-which(final.data$extras %in% outliers_extras),]
+outliers_miles = boxplot(final.data$trip_miles)$out
+final.data = final.data[-which(final.data$trip_miles %in% outliers_miles),]
+```
+.	The data sampled is cleaned with the underlying assumption that if a passenger gets into the cab, he would travel a few miles for a few seconds, he would pay the fare with tips and applicable extras as total trip fare.
+.	If the dataset contains rows with  trip miles as 0 and trip seconds as 0 but if he has paid some fare, which doesn't make any sense. Hence I removed the such rows which had the aberrancies. There were 15 of such rows.
+.	If the samples contained exorbitantly high values in the variables such as extras and miles and trip total, I removed them. There were 9 + 8 + 1= 18 such samples.
+.	I ended up with having 67 data samples to run my analysis on.
+
+Analysis:
+
+1.	Using your cleansed sample data, provide summaries and density plots of each of the continuous variables in your data set with the exception of taxi_id.  Explain any apparent differences in the statistical distributions of these variables in your sample data.
+
+```{r}
+summary(final.data [,c(2:9)])
+par(mfrow=c(1, 1))
+plot(density(final.data$trip_seconds),lwd=3, main="Density Plot of Trip_Seconds")
+plot(density(final.data$trip_miles),lwd=3, main="Density Plot of Trip_Miles")
+plot(density(final.data$fare),lwd=3, main="Density Plot of Fare")
+plot(density(final.data$tips),lwd=3, main="Density Plot of Tips")
+plot(density(final.data$tolls),lwd=3, main="Density Plot of Tolls")
+plot(density(final.data$extras),lwd=3, main="Density Plot of Extras")
+plot(density(final.data$trip_total),lwd=3, main="Density Plot of Trip_Total")
+```
+
+2.	Using the payment_type factor variable and your cleansed sample data, provide a table of the number of cases in each level of payment_type.
+
+```{r}
+library(plyr)
+count(final.data, vars = c("payment_type"))
+```
+
+3.	Construct an easily read and easily understood correlation matrix using all continuous variables except taxi_id.  Give a brief interpretation of the matrix understandable by a non-statistician. 
+
+```{r}
+cor(final.data[,c(2:5,7,8)])
+library(corrplot)
+library(Hmisc)
+xx = rcorr(as.matrix(final.data[,c(2:5,7,8)]))
+xx
+```
+
+4.	Using fare as the dependent variable, build a regression model using trip_seconds, trip_miles, and payment_type as potential independent variables.  Evaluate the quality of fit of the model to your cleansed data.  Explain the impact each independent variable in your model on the dependent variable, considering the 95% confidence interval on the beta coefficients.
+
+```{r}
+regout=lm(trip_total~trip_seconds+trip_miles+payment_type,data=final.data)
+summary(regout)
+
+confint(regout)
+```
+
+
+5.	Investigate relevant interactions and common independent variable transforms to determine if adding these to your model will result in a better model fit.  Depending on your random data selection you may find it necessary to do some additional cleansing of your data in order to get a better model fit for the majority of data points.  
+
+```{r}
+model.all.out=lm(trip_total~trip_seconds+trip_miles+payment_type+fare+extras,data=final.data)
+summary(model.all.out)
+```
+
+By taking trip_total as dependant variable and all other continuous variables as independant, we can see that the adjusted R^2 is at 98.36%. This model has payment type, fare and extras as statistically significant and trip seconds as some what significant but the intercept and the trip miles as non-significant as the p-value > 0.05. There is only 1.64% of unexpectedness using this model.
+
+```{r}
+
+model.fare.squared.out=lm(trip_total~trip_seconds+trip_miles+payment_type+fare+extras+I(fare^2), data =final.data)
+summary(model.fare.squared.out)
+
+model.miles.squared.out=lm(trip_total~trip_seconds+trip_miles+payment_type+fare+extras+I(trip_miles^2), data =final.data)
+summary(model.miles.squared.out)
+
+model.seconds.squared.out=lm(trip_total~trip_seconds+trip_miles+payment_type+fare+extras+I(trip_seconds^2), data =final.data)
+summary(model.seconds.squared.out)
+
+model.secondsmiles.squared.out=lm(trip_total~trip_seconds+trip_miles+payment_type+fare+extras+I(trip_seconds^2)+I(trip_miles^2), data =final.data)
+summary(model.secondsmiles.squared.out)
+
+model.faresecondsmiles.squared.out=lm(trip_total~trip_seconds+trip_miles+payment_type+fare+extras+I(fare^2)+I(trip_seconds^2)+I(trip_miles^2), data =final.data)
+summary(model.faresecondsmiles.squared.out)
+
+model.extras.squared.out=lm(trip_total~trip_seconds+trip_miles+payment_type+extras+I(extras^2)+tips, data =final.data)
+summary(model.extras.squared.out)
+
+model.secondsmilesextras.squared.out=lm(trip_total~trip_seconds+trip_miles+payment_type+extras+I(extras^2)+fare+I(trip_seconds^2)+I(trip_miles^2), data =final.data)
+summary(model.secondsmilesextras.squared.out)
+
+
+model.noextras.out=lm(trip_total~trip_seconds+trip_miles+payment_type +fare,data=final.data)
+summary(model.noextras.out)
+
+model.all.tips.out=lm(trip_total~trip_seconds+trip_miles+payment_type +fare+extras+tips, data=final.data)
+summary(model.all.tips.out)
+
+model.secondsmilesextrasfare.squared.out=lm(trip_total~trip_seconds+trip_miles+payment_type+extras+I(extras^2)+fare+I(trip_seconds^2)+I(trip_miles^2)+I(fare^2), data =final.data)
+summary(model.secondsmilesextras.squared.out)
+
+
+```
+
+6.	Of the various combinations you ran in Step 5, report the model which provides what you deem as the "best fit" to your sample data.  Explain why you selected this particular model and show the standard R regression output for the model.  Evaluate and explain your model's conformity to the LINE assumptions of regression. 
+
+```{r}
+model.faresecondsmiles.squared.out=lm(trip_total~trip_seconds+trip_miles+payment_type+fare+extras+I(fare^2)+I(trip_seconds^2)+I(trip_miles^2), data =final.data)
+summary(model.faresecondsmiles.squared.out)
+
+par(mfrow=c(2,2))
+
+plot(model.faresecondsmiles.squared.out)
+
+par(mfrow=c(1,1))
+#Linearity
+plot(final.data$trip_total,model.faresecondsmiles.squared.out$fitted.values,
+     pch=19,main="Trip_Total Actuals v. Fitted")
+abline(0,1,col="red",lwd=3)
+
+#Normality
+qqnorm(model.faresecondsmiles.squared.out$residuals,pch=19,
+       main="Trip_Total Normality Plot")
+qqline(model.faresecondsmiles.squared.out$residuals,lwd=3,col="red")
+
+#Equality of Variances
+plot(final.data$trip_total,rstandard(model.faresecondsmiles.squared.out),
+     pch=19,main="Trip_Total Residual Plot")
+abline(0,0,col="red",lwd=3)
+
+```
+7.	Investigate and remove any data points deemed to have an inappropriately high leverage in determining the plot of the model.  Rerun your model without these points and evaluate the quality of fit in this final regression model.
+
+```{r}
+lev=hat(model.matrix(model.faresecondsmiles.squared.out))
+plot(lev,pch=19, ylim=c(0,.8))
+abline(3*mean(lev),0,col="red",lwd=3)
+mean(3*mean(lev))
+
+final.data[lev>(3*mean(lev)),]
+
+
+which(final.data$taxi_id == 4111) 
+which(final.data$taxi_id == 6524)
+which(final.data$taxi_id == 8028)
+which(final.data$taxi_id == 1669)
+
+red.date = final.data[-34,]
+red.data2 = red.date[-7,]
+red.data3 = red.data2[-2,]
+red.data4 = red.data3[-39,]
+
+model.faresecondsmiles.squared.out=lm(trip_total~trip_seconds+trip_miles+payment_type+fare+extras+I(fare^2)+I(trip_seconds^2)+I(trip_miles^2), data = red.data4)
+summary(model.faresecondsmiles.squared.out)
+
+```
+
+8.	Return to the full data set of 1.7 million cases.  Pull another sample of n=100 cases.  (Be sure to use a new random number seed of the numerical portion of your U number plus 5.) To this data set apply the same cleansing procedures you used on your original sample data set.  Referring to the model you developed in Step 6 above, apply that model to the new random set of data and evaluate how well the model fits this second data set.
+
+```{r}
+
+set.seed(248895425)
+my.2.data = master.data[sample(1:nrow(master.data),100,replace=FALSE),]
+attach(my.2.data)
+summary(my.2.data)
+```
+Data cleaning Steps:
+Removing the max outlier in trip total variable
+```{r}
+max(my.2.data$trip_total)
+which(my.2.data$trip_total == 84.75)
+my.2.data = my.data[-51,]
+```
+Removing the data rows that has trip seconds as 0 and trip total>0
+```{r}
+final.2.data = subset(my.2.data, trip_seconds !=0 )
+```
+Removing the outlier in the extras and trip miles variables
+```{r}
+outliers_extras2 = boxplot(final.2.data$extras)$out
+final.2.data = final.data[-which(final.2.data$extras %in% outliers_extras2),]
+outliers_miles2 = boxplot(final.2.data$trip_miles)$out
+final.2.data = final.data[-which(final.2.data$trip_miles %in% outliers_miles2),]
+
+summary(final.2.data)
+
+model.faresecondsmiles.squared.out2=lm(trip_total~trip_seconds+trip_miles+payment_type+fare+extras+I(fare^2)+I(trip_seconds^2)+I(trip_miles^2), data = final.2.data)
+summary(model.faresecondsmiles.squared.out2)
+```
